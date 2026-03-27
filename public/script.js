@@ -78,11 +78,13 @@ window.login = async function() {
         if (snapshot.empty) return alert("Login Gagal: Akun tidak ditemukan atau Role salah.");
 
         snapshot.forEach(doc => {
-            localStorage.setItem('edusmartUser', JSON.stringify({
-                name: doc.data().nama_lengkap,
-                email: doc.data().email,
-                role: doc.data().role
-            }));
+        const data = doc.data();
+
+        localStorage.setItem('edusmartUser', JSON.stringify({
+            nama_lengkap: data.nama_lengkap || data.fullName || data.name || "Tidak ada nama",
+            email: data.email,
+            role: data.role
+        }));
         });
         window.location.href = 'dashboard.html';
     } catch (e) { alert("Error koneksi: " + e.message); }
@@ -115,14 +117,65 @@ window.togglePass = function(id, btn) {
 /* ==========================================================
    4. SISTEM MATERI & KELAS
    ========================================================== */
+function getCurrentUser() {
+    return JSON.parse(localStorage.getItem('edusmartUser') || '{}');
+}
+
+function isGuru() {
+    const user = getCurrentUser();
+    return user.role === 'guru';
+}
+
+window.toggleModal = function(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+
+    if (modal.style.display === 'flex') {
+        modal.style.display = 'none';
+    } else {
+        modal.style.display = 'flex';
+    }
+};
+
+window.initMateriPage = function() {
+    const user = getCurrentUser();
+    const actionBtn = document.getElementById('featureAction');
+
+    if (actionBtn) {
+        if (user.role === 'guru') {
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.onclick = function () {
+                toggleModal('modalTambahMateri');
+            };
+        } else {
+            actionBtn.style.display = 'none';
+        }
+    }
+
+    muatMateri();
+};
+
 window.muatMateri = async function() {
     const grid = document.getElementById('materiGrid');
     if (!grid) return;
-    const user = JSON.parse(localStorage.getItem('edusmartUser') || '{}');
+
+    const user = getCurrentUser();
 
     try {
         const snapshot = await db.collection("materi").orderBy("createdAt", "desc").get();
         grid.innerHTML = "";
+
+        if (snapshot.empty) {
+            grid.innerHTML = `
+                <article class="card-subject">
+                    <div class="subject-tag">BELUM ADA</div>
+                    <h3>Belum ada materi</h3>
+                    <p>Materi akan tampil di sini setelah ditambahkan oleh guru.</p>
+                </article>
+            `;
+            return;
+        }
+
         snapshot.forEach((doc) => {
             const data = doc.data();
             const id = doc.id;
@@ -130,52 +183,106 @@ window.muatMateri = async function() {
 
             grid.innerHTML += `
                 <article class="card-subject">
-                    <div class="subject-tag">${data.kategori}</div>
-                    <h3>${data.judul}</h3>
-                    <p>${data.deskripsi}</p>
-                    <div class="card-footer-row" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-                        <a href="${data.link_sumber}" target="_blank" class="btn-buka">Buka</a>
-                        ${isOwner ? `<button onclick="hapusMateri('${id}')" style="cursor:pointer; border:none; background:none;">🗑️</button>` : ''}
+                    <div class="subject-tag">${data.kategori || 'Materi'}</div>
+                    <h3>${data.judul || '-'}</h3>
+                    <p>${data.deskripsi || '-'}</p>
+
+                    <div class="card-footer-row" style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+                        <a href="${data.link_sumber || '#'}" target="_blank" class="btn-buka">Buka</a>
+                        ${isOwner ? `
+                            <button
+                                type="button"
+                                onclick="hapusMateri('${id}')"
+                                style="cursor:pointer; border:none; background:none; font-size:20px;">
+                                🗑️
+                            </button>
+                        ` : ''}
                     </div>
-                </article>`;
+                </article>
+            `;
         });
-    } catch (e) { console.error("Gagal muat materi:", e); }
-};
-
-window.initKelasUI = function() {
-    const user = JSON.parse(localStorage.getItem('edusmartUser') || '{}');
-    const controls = document.getElementById('classControls');
-    if(!controls) return;
-
-    if (user.role === 'guru') {
-        controls.innerHTML = `<button onclick="toggleModal('modalTambahKelas')" class="btn-buka">+ Buat Kelas Baru</button>`;
-    } else {
-        controls.innerHTML = `
-            <div style="display:flex; gap:10px;">
-                <input type="text" id="inputKodeGabung" placeholder="Kode 6 Digit" style="text-transform:uppercase; padding:8px;">
-                <button onclick="gabungKeKelas()" class="btn-buka">Gabung</button>
-            </div>`;
+    } catch (e) {
+        console.error("Gagal muat materi:", e);
+        grid.innerHTML = `
+            <article class="card-subject">
+                <div class="subject-tag">ERROR</div>
+                <h3>Gagal memuat materi</h3>
+                <p>Periksa koneksi atau konfigurasi Firebase Anda.</p>
+            </article>
+        `;
     }
-    muatDaftarKelas();
 };
 
-window.simpanKelasBaru = async function() {
-    const user = JSON.parse(localStorage.getItem('edusmartUser'));
-    const nama = document.getElementById('inputNamaKelas').value;
-    const kode = Math.random().toString(36).substring(2, 8).toUpperCase();
+window.simpanMateriBaru = async function() {
+    const user = getCurrentUser();
+
+    if (user.role !== 'guru') {
+        alert("Hanya guru yang dapat menambahkan materi.");
+        return;
+    }
+
+    const judul = document.getElementById('inputJudulMateri')?.value.trim();
+    const deskripsi = document.getElementById('inputDeskripsiMateri')?.value.trim();
+    const kategori = document.getElementById('inputKategoriMateri')?.value;
+    const link = document.getElementById('inputLinkMateri')?.value.trim();
+
+    if (!judul || !deskripsi || !kategori || !link) {
+        alert("Semua field materi wajib diisi.");
+        return;
+    }
 
     try {
-        await db.collection("kelas").add({
-            nama_kelas: nama,
-            kode_kelas: kode,
-            guru_email: user.email,
-            guru_nama: user.name,
-            siswa_terdaftar: [],
+        await db.collection("materi").add({
+            judul: judul,
+            deskripsi: deskripsi,
+            kategori: kategori,
+            link_sumber: link,
+            email_pengunggah: user.email,
+            nama_pengunggah: user.name || '',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        alert(`Kelas Dibuat! KODE: ${kode}`);
-        location.reload();
-    } catch (e) { alert("Gagal."); }
+
+        alert("Materi berhasil ditambahkan.");
+        bersihkanFormMateri();
+        toggleModal('modalTambahMateri');
+        muatMateri();
+    } catch (e) {
+        console.error("Gagal simpan materi:", e);
+        alert("Gagal menyimpan materi.");
+    }
+};
+
+window.bersihkanFormMateri = function() {
+    const judul = document.getElementById('inputJudulMateri');
+    const deskripsi = document.getElementById('inputDeskripsiMateri');
+    const kategori = document.getElementById('inputKategoriMateri');
+    const link = document.getElementById('inputLinkMateri');
+
+    if (judul) judul.value = '';
+    if (deskripsi) deskripsi.value = '';
+    if (kategori) kategori.value = 'Modul';
+    if (link) link.value = '';
+};
+
+window.hapusMateri = async function(id) {
+    const user = getCurrentUser();
+
+    if (user.role !== 'guru') {
+        alert("Hanya guru yang dapat menghapus materi.");
+        return;
+    }
+
+    const konfirmasi = confirm("Yakin ingin menghapus materi ini?");
+    if (!konfirmasi) return;
+
+    try {
+        await db.collection("materi").doc(id).delete();
+        alert("Materi berhasil dihapus.");
+        muatMateri();
+    } catch (e) {
+        console.error("Gagal hapus materi:", e);
+        alert("Gagal menghapus materi.");
+    }
 };
 
 /* ==========================================================
@@ -227,3 +334,30 @@ document.addEventListener('DOMContentLoaded', () => {
         initKelasUI();
     }
 });
+
+function initProfilePage() {
+  const user = JSON.parse(localStorage.getItem('edusmartUser'));
+
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  const name = user.nama_lengkap && user.nama_lengkap !== ""
+    ? user.nama_lengkap
+    : "Tidak ada nama";
+
+  document.getElementById("profileName").textContent = name;
+  document.getElementById("detailName").textContent = name;
+
+  document.getElementById("profileRole").textContent = user.role.toUpperCase();
+  document.getElementById("detailEmail").textContent = user.email;
+  document.getElementById("detailRole").textContent = user.role;
+
+  document.getElementById("avatarBox").textContent = name.substring(0,2).toUpperCase();
+}
+
+function logout() {
+  localStorage.removeItem("edusmartUser");
+  window.location.href = "index.html";
+}
