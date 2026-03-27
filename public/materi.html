@@ -6,7 +6,8 @@
   <title>Materi EduSmart</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="dashboard-page" onload="initFeaturePage('materi')">
+<body class="dashboard-page" onload="initMateriPage()">
+  
   <header class="topbar">
     <div class="logo-area">
       <div class="logo-circle">ES</div>
@@ -15,6 +16,7 @@
         <div class="subtle">Halaman materi</div>
       </div>
     </div>
+
     <nav class="menu">
       <a href="dashboard.html" class="menu-btn">Dashboard</a>
       <a href="materi.html" class="menu-btn active">Materi</a>
@@ -31,20 +33,48 @@
         <div>
           <p class="eyebrow">Pusat materi</p>
           <h1 id="featureTitle">Materi pembelajaran</h1>
-          <p id="featureDescription">Semua materi tersusun berdasarkan topik agar lebih mudah dipelajari maupun dikelola.</p>
+          <p id="featureDescription">
+            Semua materi tersusun berdasarkan topik agar lebih mudah dipelajari maupun dikelola.
+          </p>
+
           <div class="filter-row">
             <span class="filter-chip">📘 Modul</span>
             <span class="filter-chip">🎥 Video</span>
             <span class="filter-chip">🧠 Ringkasan</span>
           </div>
         </div>
+
+        <!-- tombol tambah -->
         <button class="ghost-btn" id="featureAction">Tambah materi</button>
       </div>
 
+      <!-- GRID MATERI -->
       <div class="feature-grid" id="featureGrid"></div>
     </section>
   </main>
 
+  <!-- 🔥 MODAL TAMBAH MATERI -->
+  <div id="modalTambahMateri" class="modal hidden">
+    <div class="modal-content">
+      <h2>Tambah Materi</h2>
+
+      <input id="inputJudulMateri" placeholder="Judul materi"><br><br>
+      <input id="inputDeskripsiMateri" placeholder="Deskripsi"><br><br>
+      <input id="inputKategoriMateri" placeholder="Kategori (IPA/MTK/dll)"><br><br>
+      <input id="inputLinkMateri" placeholder="Link sumber"><br><br>
+
+      <button onclick="simpanMateriBaru()">Simpan</button>
+      <button onclick="toggleModal('modalTambahMateri')">Batal</button>
+    </div>
+  </div>
+
+  <!-- FIREBASE -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script> 
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <!-- SCRIPT -->
   <script src="script.js"></script>
+
 </body>
 </html>
