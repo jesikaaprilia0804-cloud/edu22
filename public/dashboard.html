@@ -27,31 +27,38 @@
   </header>
 
   <main class="dashboard-container">
+    <!-- HERO -->
     <section class="hero-panel">
       <div>
         <p class="eyebrow" id="heroBadge">EduSmart • Pembelajaran Digital</p>
         <h1 id="heroTitle">Semua aktivitas belajar dalam satu tempat.</h1>
-        <p id="heroDesc">Kelola materi, quiz, dan kelas dengan tampilan yang lebih rapi dan mudah dipahami.</p>
+        <p id="heroDesc">
+          Kelola materi, quiz, dan kelas dengan tampilan yang lebih rapi dan mudah dipahami.
+        </p>
       </div>
+
       <div class="hero-stats">
         <div class="stat-card">
           <span>📚</span>
-          <strong id="statOne">12 Materi aktif</strong>
-          <p>Konten terbaru minggu ini</p>
+          <strong id="statOne">0 Materi</strong>
+          <p>Konten pembelajaran terbaru</p>
         </div>
+
         <div class="stat-card">
           <span>📝</span>
-          <strong id="statTwo">4 Quiz berjalan</strong>
-          <p>Pantau progres harian</p>
+          <strong id="statTwo">0 Quiz</strong>
+          <p>Evaluasi yang tersedia</p>
         </div>
+
         <div class="stat-card">
           <span>👥</span>
-          <strong id="statThree">3 Kelas terdaftar</strong>
-          <p>Aktivitas sinkron & asinkron</p>
+          <strong id="statThree">0 Kelas</strong>
+          <p>Aktivitas belajar Anda</p>
         </div>
       </div>
     </section>
 
+    <!-- MENU CEPAT -->
     <section id="beranda" class="content-section section-shell">
       <div class="section-header">
         <div>
@@ -63,21 +70,27 @@
       <div class="quick-grid" id="quickGrid"></div>
     </section>
 
-<section class="section-shell">
-    <div class="section-header">
+    <!-- MATERI -->
+    <section class="section-shell">
+      <div class="section-header">
         <div>
-            <h2>📚 Materi Pembelajaran</h2>
-            <p class="muted">Akses modul dan materi terbaru di sini.</p>
+          <h2>📚 Materi Pembelajaran</h2>
+          <p class="muted">Akses modul dan materi terbaru di sini.</p>
         </div>
-        <button id="materiAction" class="btn-buka hidden" onclick="toggleModal('modalMateri')">
-            + Tambah Materi
+
+        <button
+          id="materiAction"
+          class="btn-buka hidden"
+          type="button"
+          onclick="toggleModal('modalMateri')">
+          + Tambah Materi
         </button>
-    </div>
+      </div>
 
-    <div id="materiGrid" class="grid-subjects">
-        </div>
-</section>
+      <div id="materiGrid" class="grid-subjects"></div>
+    </section>
 
+    <!-- QUIZ -->
     <section id="quiz" class="content-section section-shell hidden">
       <div class="section-header">
         <div>
@@ -90,6 +103,7 @@
       <div class="grid-panels" id="quizGrid"></div>
     </section>
 
+    <!-- KELAS -->
     <section id="kelas" class="content-section section-shell hidden">
       <div class="section-header">
         <div>
@@ -102,46 +116,63 @@
       <div class="grid-panels" id="kelasGrid"></div>
     </section>
   </main>
-<div id="modalMateri" class="modal-overlay hidden">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>Unggah Materi Baru</h3>
-      <button class="close-btn" onclick="toggleModal('modalMateri')">&times;</button>
-    </div>
-  // guru saja yang bisa akses modal ini, jadi tidak perlu cek role lagi di sini
-    <div class="modal-body">
-      <div class="field">
-        <label>Judul Materi</label>
-        <input type="text" id="materiTitle" placeholder="Contoh: Aljabar Dasar">
+
+  <!-- MODAL TAMBAH MATERI -->
+  <div id="modalMateri" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Unggah Materi Baru</h3>
+        <button type="button" class="modal-close" onclick="toggleModal('modalMateri')">
+          &times;
+        </button>
       </div>
 
-      <div class="field">
-        <label>Kategori</label>
-        <select id="materiCategory">
-          <option value="Matematika">Matematika</option>
-          <option value="IPA">IPA</option>
-          <option value="Bahasa Inggris">Bahasa Inggris</option>
-          <option value="Informatika">Informatika</option>
-        </select>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="materiTitle">Judul Materi</label>
+          <input type="text" id="materiTitle" placeholder="Contoh: Aljabar Dasar">
+        </div>
+
+        <div class="form-group">
+          <label for="materiCategory">Kategori Materi</label>
+          <select id="materiCategory">
+            <option value="Modul">Modul</option>
+            <option value="Video">Video</option>
+            <option value="Ringkasan">Ringkasan</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="materiKelas">Pilih Kelas</label>
+          <select id="materiKelas">
+            <option value="">Pilih kelas</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="materiDesc">Deskripsi Singkat</label>
+          <textarea id="materiDesc" rows="3" placeholder="Jelaskan isi materi..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="materiLink">Link Sumber (PDF / YouTube / Drive)</label>
+          <input type="url" id="materiLink" placeholder="https://youtube.com/...">
+        </div>
       </div>
 
-      <div class="field">
-        <label>Deskripsi Singkat</label>
-        <textarea id="materiDesc" rows="3" placeholder="Jelaskan isi materi..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" onclick="toggleModal('modalMateri')">
+          Batal
+        </button>
+        <button type="button" class="btn-buka" onclick="tambahMateri()">
+          Publikasikan
+        </button>
       </div>
-
-      <div class="field">
-        <label>Link Sumber (PDF/YouTube)</label>
-        <input type="url" id="materiLink" placeholder="https://youtube.com/...">
-      </div>
-    </div>
-
-    <div class="modal-footer">
-      <button class="btn-secondary" onclick="toggleModal('modalMateri')">Batal</button>
-      <button class="btn-primary" onclick="tambahMateri()">Publikasikan</button>
     </div>
   </div>
-</div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
