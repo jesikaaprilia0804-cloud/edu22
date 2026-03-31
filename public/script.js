@@ -1127,12 +1127,14 @@ window.resetFormSoalAktif = function() {
     const optA = document.getElementById("optA");
     const optB = document.getElementById("optB");
     const optC = document.getElementById("optC");
+    const optD = document.getElementById("optD");
     const kunci = document.getElementById("kunciJawaban");
 
     if (soalText) soalText.value = "";
     if (optA) optA.value = "";
     if (optB) optB.value = "";
     if (optC) optC.value = "";
+    if (optD) optD.value = "";
     if (kunci) kunci.value = "a";
 };
 
@@ -1141,14 +1143,15 @@ window.simpanSoalSementara = function() {
     const a = document.getElementById("optA")?.value.trim();
     const b = document.getElementById("optB")?.value.trim();
     const c = document.getElementById("optC")?.value.trim();
+    const d = document.getElementById("optD")?.value.trim();
     const kunci = document.getElementById("kunciJawaban")?.value;
 
-    if (!soal || !a || !b || !c || !kunci) {
+    if (!soal || !a || !b || !c || !d || !kunci) {
         alert("Lengkapi semua field soal terlebih dahulu.");
         return;
     }
 
-    draftSoalQuiz.push({ soal, a, b, c, kunci });
+    draftSoalQuiz.push({ soal, a, b, c, d, kunci });
     renderPreviewSoal();
     resetFormSoalAktif();
 };
@@ -1391,7 +1394,8 @@ window.mulaiQuiz = async function(id) {
                 <p><strong>${index + 1}. ${escapeHtml(soal.soal)}</strong></p>
                 <label><input type="radio" name="jawaban_${index}" value="a"> ${escapeHtml(soal.a)}</label><br><br>
                 <label><input type="radio" name="jawaban_${index}" value="b"> ${escapeHtml(soal.b)}</label><br><br>
-                <label><input type="radio" name="jawaban_${index}" value="c"> ${escapeHtml(soal.c)}</label>
+                <label><input type="radio" name="jawaban_${index}" value="c"> ${escapeHtml(soal.c)}</label><br><br>
+                <label><input type="radio" name="jawaban_${index}" value="d"> ${escapeHtml(soal.d)}</label>
             </div>
         `).join("") + `
             <button class="btn-buka" onclick="submitQuiz('${id}')">Kirim Jawaban</button>
@@ -1891,9 +1895,11 @@ window.isiQuizDashboard = async function(user) {
 
     try {
         let quizList = [];
+        let snapshot;
 
         if (isGuru()) {
-            const snapshot = await db.collection("quizzes")
+            // Guru: tetap lihat quiz miliknya sendiri
+            snapshot = await db.collection("quizzes")
                 .where("pembuat", "==", user.email)
                 .get();
 
@@ -1902,15 +1908,15 @@ window.isiQuizDashboard = async function(user) {
             });
 
         } else {
-            // 🔥 AMBIL KELAS YANG DIA IKUTI
+            // 🔥 Siswa: ambil kelas yang diikuti
             const joinedClassIds = await getKelasYangDiikutiSiswa();
 
             if (!joinedClassIds.length) {
-                quizGrid.innerHTML = `<p>Anda belum ikut kelas.</p>`;
+                quizGrid.innerHTML = `<p>Anda belum mengikuti kelas apapun.</p>`;
                 return;
             }
 
-            const snapshot = await db.collection("quizzes").get();
+            snapshot = await db.collection("quizzes").get();
 
             snapshot.forEach(doc => {
                 const data = doc.data();
@@ -1922,6 +1928,7 @@ window.isiQuizDashboard = async function(user) {
             });
         }
 
+        // sorting
         quizList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
             const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
