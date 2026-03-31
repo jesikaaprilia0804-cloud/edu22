@@ -316,6 +316,7 @@ window.muatDaftarKelas = async function() {
                     <div class="subject-tag">BELUM ADA</div>
                     <h3>Belum ada kelas</h3>
                     <p>Kelas akan tampil di sini.</p>
+            
                 </article>
             `;
             return;
@@ -342,6 +343,11 @@ window.muatDaftarKelas = async function() {
                         <a href="materi.html?kelas_id=${doc.id}" class="btn-buka">Materi</a>
                         <button class="btn-buka" onclick="lihatDetailKelas('${doc.id}')">Detail Kelas</button>
                         ${isPemilik ? `<button class="ghost-btn" onclick="hapusKelas('${doc.id}')">Hapus</button>` : ''}
+                        ${isGuru() ? `
+                    <button class="ghost-btn" onclick="lihatSiswaKelas('${doc.id}')">
+                        Lihat Siswa
+                    </button>
+                ` : ""}
                     </div>
                 </article>
             `;
@@ -2081,5 +2087,51 @@ window.resetPasswordManual = async function() {
     } catch (e) {
         console.error("Gagal reset password:", e);
         if (resetError) resetError.textContent = "Gagal reset password.";
+    }
+};
+
+window.lihatSiswaKelas = async function(kelasId) {
+    try {
+        const doc = await db.collection("kelas").doc(kelasId).get();
+
+        if (!doc.exists) {
+            alert("Kelas tidak ditemukan");
+            return;
+        }
+
+        const data = doc.data();
+        const siswa = Array.isArray(data.siswa_terdaftar) ? data.siswa_terdaftar : [];
+
+        console.log("DATA SISWA:", siswa); // debug
+
+        const container = document.getElementById("daftarSiswaKelas");
+
+        if (!container) {
+            console.error("Element daftarSiswaKelas tidak ada di HTML");
+            return;
+        }
+
+        container.innerHTML = "";
+
+        if (siswa.length === 0) {
+            container.innerHTML = `<p>Belum ada siswa yang bergabung.</p>`;
+            return;
+        }
+
+        siswa.forEach((s, i) => {
+            container.innerHTML += `
+                <div class="card-siswa">
+                    <p><strong>${i + 1}. ${escapeHtml(s.nama || "-")}</strong></p>
+                    <p>${escapeHtml(s.email || "-")}</p>
+                </div>
+            `;
+        });
+
+        // tampilkan modal / section
+        toggleModal("modalSiswaKelas");
+
+    } catch (e) {
+        console.error("Gagal ambil siswa:", e);
+        alert("Gagal memuat data siswa");
     }
 };

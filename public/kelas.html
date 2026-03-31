@@ -104,7 +104,18 @@
       </div>
     </div>
   </div>
+<!-- MODAL LIHAT SISWA -->
+<div id="modalSiswaKelas" class="modal hidden">
+    <div class="modal-content">
+        <h2>Daftar Siswa</h2>
 
+        <div id="daftarSiswaKelas"></div>
+
+        <button class="btn-buka" onclick="toggleModal('modalSiswaKelas')">
+            Tutup
+        </button>
+    </div>
+</div>
   <!-- Modal pengumuman -->
   <div id="modalTambahPengumuman" class="modal-overlay" style="display:none;">
     <div class="modal-box">
@@ -169,4 +180,5 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="script.js"></script>
 </body>
+
 </html>
