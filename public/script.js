@@ -3,7 +3,8 @@
    ========================================================== */
 let selectedRole = 'siswa';
 let registerRole = 'siswa';
-let quizTimer;
+let quizTimer = null;
+let draftSoalQuiz = [];
 
 const firebaseConfig = {
     apiKey: "AIzaSyC8-ugSgkGk37dNP-htNVlB8FG5NkE2p4U",
@@ -18,6 +19,7 @@ const firebaseConfig = {
 if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
+
 const db = firebase.firestore();
 
 /* ==========================================================
@@ -64,24 +66,32 @@ function formatTanggal(ts) {
             year: "numeric"
         });
     } catch {
-        return "-";
+        try {
+            return new Date(ts).toLocaleDateString("id-ID");
+        } catch {
+            return "-";
+        }
     }
 }
 
 window.toggleModal = function(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
-
-    if (modal.style.display === 'flex') {
-        modal.style.display = 'none';
-    } else {
-        modal.style.display = 'flex';
-    }
+    modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
 };
 
 window.logout = function() {
     localStorage.removeItem("edusmartUser");
     window.location.href = "index.html";
+};
+
+window.readFileAsDataURL = function(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsDataURL(file);
+    });
 };
 
 /* ==========================================================
@@ -97,7 +107,7 @@ window.setRole = function(role) {
 window.setRegisterRole = function(role) {
     registerRole = role;
     document.querySelectorAll('#registerRoleSwitch .role-btn').forEach(b => {
-        b.classList.toggle('active', b.getAttribute('onclick').includes(role));
+        b.classList.toggle('active', b.getAttribute('onclick')?.includes(role));
     });
 };
 
@@ -184,10 +194,10 @@ window.togglePass = function(id, btn) {
 
     if (input.type === 'password') {
         input.type = 'text';
-        btn.textContent = '🔒';
+        if (btn) btn.textContent = '🔒';
     } else {
         input.type = 'password';
-        btn.textContent = '👁️';
+        if (btn) btn.textContent = '👁️';
     }
 };
 
@@ -209,31 +219,21 @@ window.initKelasPage = async function() {
         roleLabel.textContent = user.role === "guru" ? "Kelola kelas" : "Akses kelas";
     }
 
-    if (guruControls) {
-        guruControls.style.display = isGuru() ? "flex" : "none";
-    }
-
-    if (siswaControls) {
-        siswaControls.style.display = isSiswa() ? "flex" : "none";
-    }
+    if (guruControls) guruControls.style.display = isGuru() ? "flex" : "none";
+    if (siswaControls) siswaControls.style.display = isSiswa() ? "flex" : "none";
 
     await muatDaftarKelas();
 };
 
 window.simpanKelasBaru = async function() {
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat membuat kelas.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat membuat kelas.");
 
     const user = getCurrentUser();
     const nama = document.getElementById('inputNamaKelas')?.value.trim();
     const aktif = document.getElementById('inputStatusKelas')?.checked ?? true;
     const kode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    if (!nama) {
-        return alert("Nama kelas wajib diisi.");
-    }
+    if (!nama) return alert("Nama kelas wajib diisi.");
 
     try {
         await db.collection("kelas").add({
@@ -247,7 +247,9 @@ window.simpanKelasBaru = async function() {
         });
 
         alert(`Kelas berhasil dibuat. Kode kelas: ${kode}`);
-        document.getElementById('inputNamaKelas').value = '';
+        if (document.getElementById('inputNamaKelas')) {
+            document.getElementById('inputNamaKelas').value = '';
+        }
         toggleModal('modalTambahKelas');
         muatDaftarKelas();
     } catch (e) {
@@ -257,35 +259,26 @@ window.simpanKelasBaru = async function() {
 };
 
 window.gabungKeKelas = async function() {
-    if (!isSiswa()) {
-        alert("Hanya siswa yang dapat bergabung ke kelas.");
-        return;
-    }
+    if (!isSiswa()) return alert("Hanya siswa yang dapat bergabung ke kelas.");
 
     const user = getCurrentUser();
     const kodeInput = document.getElementById('inputKodeGabung')?.value.trim().toUpperCase();
 
-    if (!kodeInput) {
-        return alert("Masukkan kode kelas.");
-    }
+    if (!kodeInput) return alert("Masukkan kode kelas.");
 
     try {
         const snapshot = await db.collection("kelas")
             .where("kode_kelas", "==", kodeInput)
             .get();
 
-        if (snapshot.empty) {
-            return alert("Kode kelas tidak ditemukan.");
-        }
+        if (snapshot.empty) return alert("Kode kelas tidak ditemukan.");
 
         const doc = snapshot.docs[0];
         const data = doc.data();
         const siswa = data.siswa_terdaftar || [];
 
         const sudahGabung = siswa.some(item => item.email === user.email);
-        if (sudahGabung) {
-            return alert("Anda sudah tergabung di kelas ini.");
-        }
+        if (sudahGabung) return alert("Anda sudah tergabung di kelas ini.");
 
         siswa.push({
             nama: getNamaUser(user),
@@ -297,7 +290,9 @@ window.gabungKeKelas = async function() {
         });
 
         alert("Berhasil bergabung ke kelas.");
-        document.getElementById('inputKodeGabung').value = '';
+        if (document.getElementById('inputKodeGabung')) {
+            document.getElementById('inputKodeGabung').value = '';
+        }
         muatDaftarKelas();
     } catch (e) {
         console.error(e);
@@ -374,10 +369,7 @@ window.muatDaftarKelas = async function() {
 };
 
 window.hapusKelas = async function(id) {
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat menghapus kelas.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat menghapus kelas.");
 
     const konfirmasi = confirm("Yakin ingin menghapus kelas ini?");
     if (!konfirmasi) return;
@@ -397,7 +389,7 @@ window.lihatDetailKelas = function(id) {
 };
 
 /* ==========================================================
-   6. DETAIL KELAS: PENGUMUMAN + JADWAL
+   6. DETAIL KELAS
    ========================================================== */
 window.initDetailKelasPage = async function() {
     const user = getCurrentUser();
@@ -407,10 +399,7 @@ window.initDetailKelasPage = async function() {
     }
 
     const kelasId = getUrlParam("kelas_id");
-    if (!kelasId) {
-        console.error("kelas_id tidak ditemukan di URL");
-        return;
-    }
+    if (!kelasId) return;
 
     await muatInfoKelas(kelasId);
     await muatPengumuman(kelasId);
@@ -426,58 +415,43 @@ window.initDetailKelasPage = async function() {
 window.muatInfoKelas = async function(kelasId) {
     try {
         const doc = await db.collection("kelas").doc(kelasId).get();
-        if (!doc.exists) {
-            console.error("Dokumen kelas tidak ditemukan:", kelasId);
-            return;
-        }
+        if (!doc.exists) return;
 
         const data = doc.data();
         const title = document.getElementById("detailNamaKelas");
         const desc = document.getElementById("detailInfoKelas");
 
         if (title) title.textContent = data.nama_kelas || "Detail Kelas";
-        if (desc) {
-            desc.textContent = `Kode: ${data.kode_kelas} • Guru: ${data.guru_nama || '-'} • Status: ${data.status_aktif ? 'Aktif' : 'Nonaktif'}`;
-        }
+        if (desc) desc.textContent = `Kode: ${data.kode_kelas} • Guru: ${data.guru_nama || '-'} • Status: ${data.status_aktif ? 'Aktif' : 'Nonaktif'}`;
     } catch (e) {
         console.error("Gagal memuat info kelas:", e);
     }
 };
 
 window.simpanPengumumanBaru = async function() {
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat membuat pengumuman.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat membuat pengumuman.");
 
     const user = getCurrentUser();
     const kelasId = getUrlParam("kelas_id");
     const judul = document.getElementById("inputJudulPengumuman")?.value.trim();
     const isi = document.getElementById("inputIsiPengumuman")?.value.trim();
 
-    if (!kelasId) {
-        alert("kelas_id tidak ditemukan.");
-        return;
-    }
-
-    if (!judul || !isi) {
-        alert("Judul dan isi pengumuman wajib diisi.");
-        return;
-    }
+    if (!kelasId) return alert("kelas_id tidak ditemukan.");
+    if (!judul || !isi) return alert("Judul dan isi pengumuman wajib diisi.");
 
     try {
         await db.collection("pengumuman").add({
             kelas_id: kelasId,
-            judul: judul,
-            isi: isi,
+            judul,
+            isi,
             dibuat_oleh_email: user.email,
             dibuat_oleh_nama: getNamaUser(user),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         alert("Pengumuman berhasil dibuat.");
-        document.getElementById("inputJudulPengumuman").value = "";
-        document.getElementById("inputIsiPengumuman").value = "";
+        if (document.getElementById("inputJudulPengumuman")) document.getElementById("inputJudulPengumuman").value = "";
+        if (document.getElementById("inputIsiPengumuman")) document.getElementById("inputIsiPengumuman").value = "";
         toggleModal("modalTambahPengumuman");
         await muatPengumuman(kelasId);
     } catch (e) {
@@ -487,10 +461,7 @@ window.simpanPengumumanBaru = async function() {
 };
 
 window.simpanJadwalBaru = async function() {
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat membuat jadwal.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat membuat jadwal.");
 
     const user = getCurrentUser();
     const kelasId = getUrlParam("kelas_id");
@@ -498,31 +469,24 @@ window.simpanJadwalBaru = async function() {
     const jam = document.getElementById("inputJamJadwal")?.value.trim();
     const kegiatan = document.getElementById("inputKegiatanJadwal")?.value.trim();
 
-    if (!kelasId) {
-        alert("kelas_id tidak ditemukan.");
-        return;
-    }
-
-    if (!hari || !jam || !kegiatan) {
-        alert("Hari, jam, dan kegiatan wajib diisi.");
-        return;
-    }
+    if (!kelasId) return alert("kelas_id tidak ditemukan.");
+    if (!hari || !jam || !kegiatan) return alert("Hari, jam, dan kegiatan wajib diisi.");
 
     try {
         await db.collection("jadwal").add({
             kelas_id: kelasId,
-            hari: hari,
-            jam: jam,
-            kegiatan: kegiatan,
+            hari,
+            jam,
+            kegiatan,
             dibuat_oleh_email: user.email,
             dibuat_oleh_nama: getNamaUser(user),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         alert("Jadwal berhasil dibuat.");
-        document.getElementById("inputHariJadwal").value = "";
-        document.getElementById("inputJamJadwal").value = "";
-        document.getElementById("inputKegiatanJadwal").value = "";
+        if (document.getElementById("inputHariJadwal")) document.getElementById("inputHariJadwal").value = "";
+        if (document.getElementById("inputJamJadwal")) document.getElementById("inputJamJadwal").value = "";
+        if (document.getElementById("inputKegiatanJadwal")) document.getElementById("inputKegiatanJadwal").value = "";
         toggleModal("modalTambahJadwal");
         await muatJadwal(kelasId);
     } catch (e) {
@@ -536,17 +500,9 @@ window.muatPengumuman = async function(kelasId) {
     if (!list) return;
 
     try {
-        const snapshot = await db.collection("pengumuman")
-            .where("kelas_id", "==", kelasId)
-            .get();
-
+        const snapshot = await db.collection("pengumuman").where("kelas_id", "==", kelasId).get();
         const dataList = [];
-        snapshot.forEach((doc) => {
-            dataList.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
+        snapshot.forEach((doc) => dataList.push({ id: doc.id, ...doc.data() }));
 
         dataList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -568,11 +524,7 @@ window.muatPengumuman = async function(kelasId) {
                     <h3>${escapeHtml(data.judul)}</h3>
                     <p>${escapeHtml(data.isi)}</p>
                     <small>${formatTanggal(data.createdAt)}</small>
-                    ${isGuru() ? `
-                        <div style="margin-top:12px;">
-                            <button class="ghost-btn" onclick="hapusPengumuman('${data.id}')">Hapus</button>
-                        </div>
-                    ` : ''}
+                    ${isGuru() ? `<div style="margin-top:12px;"><button class="ghost-btn" onclick="hapusPengumuman('${data.id}')">Hapus</button></div>` : ''}
                 </article>
             `;
         });
@@ -587,17 +539,9 @@ window.muatJadwal = async function(kelasId) {
     if (!list) return;
 
     try {
-        const snapshot = await db.collection("jadwal")
-            .where("kelas_id", "==", kelasId)
-            .get();
-
+        const snapshot = await db.collection("jadwal").where("kelas_id", "==", kelasId).get();
         const dataList = [];
-        snapshot.forEach((doc) => {
-            dataList.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
+        snapshot.forEach((doc) => dataList.push({ id: doc.id, ...doc.data() }));
 
         dataList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -618,11 +562,7 @@ window.muatJadwal = async function(kelasId) {
                     <div class="subject-tag">${escapeHtml(data.hari)}</div>
                     <h3>${escapeHtml(data.jam)}</h3>
                     <p>${escapeHtml(data.kegiatan)}</p>
-                    ${isGuru() ? `
-                        <div style="margin-top:12px;">
-                            <button class="ghost-btn" onclick="hapusJadwal('${data.id}')">Hapus</button>
-                        </div>
-                    ` : ''}
+                    ${isGuru() ? `<div style="margin-top:12px;"><button class="ghost-btn" onclick="hapusJadwal('${data.id}')">Hapus</button></div>` : ''}
                 </article>
             `;
         });
@@ -634,7 +574,6 @@ window.muatJadwal = async function(kelasId) {
 
 window.hapusPengumuman = async function(id) {
     if (!isGuru()) return;
-
     try {
         await db.collection("pengumuman").doc(id).delete();
         await muatPengumuman(getUrlParam("kelas_id"));
@@ -646,7 +585,6 @@ window.hapusPengumuman = async function(id) {
 
 window.hapusJadwal = async function(id) {
     if (!isGuru()) return;
-
     try {
         await db.collection("jadwal").doc(id).delete();
         await muatJadwal(getUrlParam("kelas_id"));
@@ -659,6 +597,124 @@ window.hapusJadwal = async function(id) {
 /* ==========================================================
    7. MATERI
    ========================================================== */
+window.cekKelasMilikGuru = async function(kelasId) {
+    const user = getCurrentUser();
+    if (!kelasId || !isGuru()) return false;
+
+    try {
+        const doc = await db.collection("kelas").doc(kelasId).get();
+        if (!doc.exists) return false;
+        return doc.data().guru_email === user.email;
+    } catch (e) {
+        console.error("Gagal cek kepemilikan kelas:", e);
+        return false;
+    }
+};
+
+window.cekSiswaIkutKelas = async function(kelasId) {
+    const user = getCurrentUser();
+    if (!kelasId || !isSiswa()) return false;
+
+    try {
+        const doc = await db.collection("kelas").doc(kelasId).get();
+        if (!doc.exists) return false;
+        const siswa = doc.data().siswa_terdaftar || [];
+        return siswa.some(item => item.email === user.email);
+    } catch (e) {
+        console.error("Gagal cek keanggotaan kelas:", e);
+        return false;
+    }
+};
+
+window.bukaMateri = function(link, namaFile = "materi", tipeFile = "") {
+    if (!link || link === "#") {
+        alert("Materi tidak tersedia.");
+        return;
+    }
+
+    try {
+        if (!String(link).startsWith("data:")) {
+            window.open(link, "_blank");
+            return;
+        }
+
+        const previewWindow = window.open("", "_blank");
+        if (!previewWindow) {
+            alert("Popup diblokir browser. Izinkan popup untuk membuka materi.");
+            return;
+        }
+
+        if (
+            tipeFile.startsWith("image/") ||
+            tipeFile === "application/pdf" ||
+            tipeFile.startsWith("text/")
+        ) {
+            previewWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>${namaFile}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            background: #f5f5f5;
+                            font-family: Arial, sans-serif;
+                        }
+                        iframe, img {
+                            width: 100%;
+                            height: 100vh;
+                            border: none;
+                            background: white;
+                            object-fit: contain;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${
+                        tipeFile.startsWith("image/")
+                            ? `<img src="${link}" alt="${namaFile}">`
+                            : `<iframe src="${link}"></iframe>`
+                    }
+                </body>
+                </html>
+            `);
+            previewWindow.document.close();
+            return;
+        }
+
+        const a = document.createElement("a");
+        a.href = link;
+        a.download = namaFile || "materi";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        previewWindow.close();
+    } catch (e) {
+        console.error("Gagal membuka materi:", e);
+        alert("Gagal membuka materi.");
+    }
+};
+
+window.bukaMateriById = async function(id) {
+    try {
+        const doc = await db.collection("materi").doc(id).get();
+        if (!doc.exists) {
+            alert("Materi tidak ditemukan.");
+            return;
+        }
+
+        const data = doc.data();
+        bukaMateri(
+            data.link_sumber || "#",
+            data.nama_file || data.judul || "materi",
+            data.tipe_file || ""
+        );
+    } catch (e) {
+        console.error("Gagal membuka materi dari ID:", e);
+        alert("Gagal membuka materi.");
+    }
+};
+
 window.initMateriPage = async function() {
     const user = getCurrentUser();
     if (!user.email) {
@@ -667,16 +723,26 @@ window.initMateriPage = async function() {
     }
 
     const kelasId = getUrlParam("kelas_id");
-    const actionBtn = document.getElementById("featureAction");
+    const controls = document.getElementById("materiControls");
+    if (controls) controls.innerHTML = "";
 
-    if (actionBtn) {
-        if (isGuru()) {
-            actionBtn.style.display = "inline-flex";
-            actionBtn.onclick = function() {
-                toggleModal("modalTambahMateri");
-            };
-        } else {
-            actionBtn.style.display = "none";
+    if (kelasId && isGuru()) {
+        const milikGuru = await cekKelasMilikGuru(kelasId);
+        if (milikGuru && controls) {
+            controls.innerHTML = `
+                <button class="ghost-btn" type="button" onclick="toggleModal('modalTambahMateri')">
+                  Tambah Materi
+                </button>
+            `;
+        }
+    }
+
+    if (kelasId && isSiswa()) {
+        const ikutKelas = await cekSiswaIkutKelas(kelasId);
+        if (!ikutKelas) {
+            alert("Anda tidak memiliki akses ke materi kelas ini.");
+            window.location.href = "kelas.html";
+            return;
         }
     }
 
@@ -692,15 +758,14 @@ window.muatInfoHeaderMateri = async function(kelasId) {
         if (title) title.textContent = "Materi pembelajaran";
         if (desc) {
             desc.textContent = isGuru()
-                ? "Semua materi yang Anda kelola akan tampil di sini."
-                : "Semua materi pembelajaran yang tersedia akan tampil di sini.";
+                ? "Materi yang Anda unggah di kelas-kelas Anda akan tampil di sini."
+                : "Materi dari kelas yang Anda ikuti akan tampil di sini.";
         }
         return;
     }
 
     try {
         const doc = await db.collection("kelas").doc(kelasId).get();
-
         if (!doc.exists) {
             if (title) title.textContent = "Kelas tidak ditemukan";
             if (desc) desc.textContent = "ID kelas tidak valid.";
@@ -726,32 +791,55 @@ window.muatMateri = async function(kelasId = null) {
     const user = getCurrentUser();
 
     try {
-        let snapshot;
+        let materiList = [];
 
-        // MODE 1: materi berdasarkan kelas
         if (kelasId) {
-            snapshot = await db.collection("materi")
+            const snapshot = await db.collection("materi")
                 .where("kelas_id", "==", kelasId)
                 .get();
-        } 
-        // MODE 2: materi umum dari menu navbar
-        else {
+
+            snapshot.forEach((doc) => {
+                materiList.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+        } else {
             if (isGuru()) {
-                snapshot = await db.collection("materi")
+                const snapshot = await db.collection("materi")
                     .where("email_pengunggah", "==", user.email)
                     .get();
+
+                snapshot.forEach((doc) => {
+                    materiList.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
             } else {
-                snapshot = await db.collection("materi").get();
+                const kelasSnap = await db.collection("kelas").get();
+                const joinedClassIds = [];
+
+                kelasSnap.forEach((doc) => {
+                    const data = doc.data();
+                    const siswa = data.siswa_terdaftar || [];
+                    if (siswa.some(item => item.email === user.email)) {
+                        joinedClassIds.push(doc.id);
+                    }
+                });
+
+                const materiSnap = await db.collection("materi").get();
+                materiSnap.forEach((doc) => {
+                    const data = doc.data();
+                    if (joinedClassIds.includes(data.kelas_id)) {
+                        materiList.push({
+                            id: doc.id,
+                            ...data
+                        });
+                    }
+                });
             }
         }
-
-        const materiList = [];
-        snapshot.forEach((doc) => {
-            materiList.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
 
         materiList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -766,9 +854,7 @@ window.muatMateri = async function(kelasId = null) {
                 <article class="card-subject">
                     <div class="subject-tag">BELUM ADA</div>
                     <h3>Belum ada materi</h3>
-                    <p>${kelasId 
-                        ? "Belum ada materi untuk kelas ini." 
-                        : "Belum ada materi yang tersedia."}</p>
+                    <p>${kelasId ? "Belum ada materi untuk kelas ini." : "Belum ada materi yang dapat diakses."}</p>
                 </article>
             `;
             return;
@@ -776,6 +862,7 @@ window.muatMateri = async function(kelasId = null) {
 
         materiList.forEach((data) => {
             const isOwner = isGuru() && user.email === data.email_pengunggah;
+            const namaTampilan = data.nama_file ? `📎 ${escapeHtml(data.nama_file)}` : "Buka";
 
             grid.innerHTML += `
                 <article class="card-subject">
@@ -787,8 +874,15 @@ window.muatMateri = async function(kelasId = null) {
                         ${formatTanggal(data.createdAt)}
                     </small>
 
-                    <div class="card-footer-row" style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
-                        <a href="${escapeHtml(data.link_sumber || "#")}" target="_blank" class="btn-buka">Buka</a>
+                    <div class="card-footer-row" style="margin-top:16px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <button
+                            type="button"
+                            class="btn-buka"
+                            onclick="bukaMateriById('${data.id}')"
+                        >
+                            ${namaTampilan}
+                        </button>
+
                         ${isOwner ? `
                             <button type="button" onclick="hapusMateri('${data.id}')" style="cursor:pointer; border:none; background:none; font-size:20px;">
                                 🗑️
@@ -804,7 +898,7 @@ window.muatMateri = async function(kelasId = null) {
             <article class="card-subject">
                 <div class="subject-tag">ERROR</div>
                 <h3>Gagal memuat materi</h3>
-                <p>Periksa koneksi, query Firestore, atau data materi.</p>
+                <p>Periksa koneksi atau konfigurasi Firebase.</p>
             </article>
         `;
     }
@@ -813,39 +907,62 @@ window.muatMateri = async function(kelasId = null) {
 window.simpanMateriBaru = async function() {
     const user = getCurrentUser();
 
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat menambahkan materi.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat menambahkan materi.");
 
     const kelasId = getUrlParam("kelas_id");
+    if (!kelasId) return alert("Materi hanya dapat ditambahkan dari halaman kelas.");
+
+    const milikGuru = await cekKelasMilikGuru(kelasId);
+    if (!milikGuru) return alert("Anda hanya dapat menambahkan materi ke kelas milik Anda.");
+
     const judul = document.getElementById("inputJudulMateri")?.value.trim();
     const deskripsi = document.getElementById("inputDeskripsiMateri")?.value.trim();
     const kategori = document.getElementById("inputKategoriMateri")?.value;
-    const link = document.getElementById("inputLinkMateri")?.value.trim();
+    const file = document.getElementById("inputFileMateri")?.files?.[0] || null;
+    const linkManualRaw = document.getElementById("inputLinkMateri")?.value.trim();
+    const linkManual = linkManualRaw === "-" ? "" : linkManualRaw;
 
-    if (!judul || !deskripsi || !kategori || !link) {
-        alert("Semua field materi wajib diisi.");
-        return;
+    if (!judul || !deskripsi || !kategori) {
+        return alert("Judul, deskripsi, dan kategori wajib diisi.");
+    }
+
+    if (!file && !linkManual) {
+        return alert("Upload file atau isi link sumber.");
     }
 
     try {
         let kelasNama = "";
+        const kelasDoc = await db.collection("kelas").doc(kelasId).get();
+        if (kelasDoc.exists) kelasNama = kelasDoc.data().nama_kelas || "";
 
-        if (kelasId) {
-            const kelasDoc = await db.collection("kelas").doc(kelasId).get();
-            if (kelasDoc.exists) {
-                kelasNama = kelasDoc.data().nama_kelas || "";
+        let finalLink = linkManual || "";
+        let namaFile = "";
+        let tipeFile = "";
+        let ukuranFile = 0;
+
+        if (file) {
+            const maxSize = 5000 * 1024;
+            if (file.size > maxSize) {
+                return alert("Ukuran file terlalu besar. Gunakan file maksimal 5 MB atau pakai link.");
             }
+
+            const dataUrl = await readFileAsDataURL(file);
+            finalLink = dataUrl;
+            namaFile = file.name;
+            tipeFile = file.type || "";
+            ukuranFile = file.size || 0;
         }
 
         await db.collection("materi").add({
-            kelas_id: kelasId || null,
-            kelas_nama: kelasNama || "",
-            judul: judul,
-            deskripsi: deskripsi,
-            kategori: kategori,
-            link_sumber: link,
+            kelas_id: kelasId,
+            kelas_nama: kelasNama,
+            judul,
+            deskripsi,
+            kategori,
+            link_sumber: finalLink,
+            nama_file: namaFile,
+            tipe_file: tipeFile,
+            ukuran_file: ukuranFile,
             email_pengunggah: user.email,
             nama_pengunggah: getNamaUser(user),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -856,28 +973,27 @@ window.simpanMateriBaru = async function() {
         toggleModal("modalTambahMateri");
         muatMateri(kelasId);
     } catch (e) {
-        console.error("Gagal simpan materi:", e);
-        alert("Gagal menyimpan materi.");
+        console.error("DETAIL ERROR SIMPAN MATERI:", e);
+        alert("Gagal menyimpan materi: " + (e.message || "Unknown error"));
     }
 };
 
 window.bersihkanFormMateri = function() {
-    const judul = document.getElementById('inputJudulMateri');
-    const deskripsi = document.getElementById('inputDeskripsiMateri');
-    const kategori = document.getElementById('inputKategoriMateri');
-    const link = document.getElementById('inputLinkMateri');
+    const judul = document.getElementById("inputJudulMateri");
+    const deskripsi = document.getElementById("inputDeskripsiMateri");
+    const kategori = document.getElementById("inputKategoriMateri");
+    const link = document.getElementById("inputLinkMateri");
+    const file = document.getElementById("inputFileMateri");
 
-    if (judul) judul.value = '';
-    if (deskripsi) deskripsi.value = '';
-    if (kategori) kategori.value = 'Modul';
-    if (link) link.value = '';
+    if (judul) judul.value = "";
+    if (deskripsi) deskripsi.value = "";
+    if (kategori) kategori.value = "Modul";
+    if (link) link.value = "";
+    if (file) file.value = "";
 };
 
 window.hapusMateri = async function(id) {
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat menghapus materi.");
-        return;
-    }
+    if (!isGuru()) return alert("Hanya guru yang dapat menghapus materi.");
 
     const konfirmasi = confirm("Yakin ingin menghapus materi ini?");
     if (!konfirmasi) return;
@@ -895,7 +1011,68 @@ window.hapusMateri = async function(id) {
 /* ==========================================================
    8. QUIZ
    ========================================================== */
-window.initQuizPage = function() {
+window.loadKelasUntukQuiz = async function() {
+    const select = document.getElementById("quizKelasSelect");
+    const user = getCurrentUser();
+
+    if (!select || !isGuru()) return;
+
+    try {
+        const snapshot = await db.collection("kelas")
+            .where("guru_email", "==", user.email)
+            .get();
+
+        const kelasList = [];
+        snapshot.forEach((doc) => {
+            kelasList.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        kelasList.sort((a, b) => {
+            const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+            const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+            return bTime - aTime;
+        });
+
+        select.innerHTML = `<option value="">Pilih kelas</option>`;
+
+        kelasList.forEach((kelas) => {
+            select.innerHTML += `
+                <option value="${kelas.id}">
+                    ${escapeHtml(kelas.nama_kelas)} (${escapeHtml(kelas.kode_kelas || "-")})
+                </option>
+            `;
+        });
+    } catch (e) {
+        console.error("Gagal memuat kelas untuk quiz:", e);
+    }
+};
+
+window.getKelasYangDiikutiSiswa = async function() {
+    const user = getCurrentUser();
+    const joinedClassIds = [];
+
+    if (!isSiswa()) return joinedClassIds;
+
+    try {
+        const kelasSnap = await db.collection("kelas").get();
+
+        kelasSnap.forEach((doc) => {
+            const data = doc.data();
+            const siswa = data.siswa_terdaftar || [];
+            const ikut = siswa.some(item => item.email === user.email);
+            if (ikut) joinedClassIds.push(doc.id);
+        });
+    } catch (e) {
+        console.error("Gagal mengambil kelas siswa:", e);
+    }
+
+    return joinedClassIds;
+};
+
+window.initQuizPage = async function() {
     const user = getCurrentUser();
     if (!user.email) {
         window.location.href = "index.html";
@@ -903,11 +1080,14 @@ window.initQuizPage = function() {
     }
 
     const btnCreateQuiz = document.getElementById("btnCreateQuiz");
+    const scoreSection = document.getElementById("quizScoreSection");
 
     if (btnCreateQuiz) {
         if (isGuru()) {
             btnCreateQuiz.style.display = "inline-flex";
-            btnCreateQuiz.onclick = function() {
+            btnCreateQuiz.onclick = async function() {
+                resetFormQuiz();
+                await loadKelasUntukQuiz();
                 toggleModal("modalQuiz");
             };
         } else {
@@ -915,7 +1095,93 @@ window.initQuizPage = function() {
         }
     }
 
-    muatDaftarQuiz();
+    if (scoreSection) {
+        scoreSection.classList.remove("hidden");
+    }
+
+    await muatDaftarQuiz();
+};
+
+window.resetFormQuiz = function() {
+    draftSoalQuiz = [];
+
+    const title = document.getElementById("quizTitle");
+    const kelasSelect = document.getElementById("quizKelasSelect");
+    const duration = document.getElementById("quizDuration");
+
+    if (title) title.value = "";
+    if (kelasSelect) kelasSelect.value = "";
+    if (duration) duration.value = "";
+
+    resetFormSoalAktif();
+    renderPreviewSoal();
+};
+
+window.resetFormSoalAktif = function() {
+    const nomor = draftSoalQuiz.length + 1;
+    const formTitle = document.getElementById("formSoalTitle");
+
+    if (formTitle) formTitle.textContent = `Soal ${nomor}`;
+
+    const soalText = document.getElementById("soalText");
+    const optA = document.getElementById("optA");
+    const optB = document.getElementById("optB");
+    const optC = document.getElementById("optC");
+    const kunci = document.getElementById("kunciJawaban");
+
+    if (soalText) soalText.value = "";
+    if (optA) optA.value = "";
+    if (optB) optB.value = "";
+    if (optC) optC.value = "";
+    if (kunci) kunci.value = "a";
+};
+
+window.simpanSoalSementara = function() {
+    const soal = document.getElementById("soalText")?.value.trim();
+    const a = document.getElementById("optA")?.value.trim();
+    const b = document.getElementById("optB")?.value.trim();
+    const c = document.getElementById("optC")?.value.trim();
+    const kunci = document.getElementById("kunciJawaban")?.value;
+
+    if (!soal || !a || !b || !c || !kunci) {
+        alert("Lengkapi semua field soal terlebih dahulu.");
+        return;
+    }
+
+    draftSoalQuiz.push({ soal, a, b, c, kunci });
+    renderPreviewSoal();
+    resetFormSoalAktif();
+};
+
+window.renderPreviewSoal = function() {
+    const preview = document.getElementById("previewSoalList");
+    if (!preview) return;
+
+    preview.innerHTML = "";
+
+    if (!draftSoalQuiz.length) {
+        preview.innerHTML = `<p>Belum ada soal disimpan.</p>`;
+        return;
+    }
+
+    draftSoalQuiz.forEach((item, index) => {
+        preview.innerHTML += `
+            <div style="border:1px solid #ddd; border-radius:12px; padding:12px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <strong>Soal ${index + 1}</strong>
+                    <button type="button" class="ghost-btn" onclick="hapusSoalDraft(${index})">Hapus</button>
+                </div>
+                <p style="margin:8px 0 6px 0;">${escapeHtml(item.soal)}</p>
+                <small>Kunci: ${item.kunci.toUpperCase()}</small>
+            </div>
+        `;
+    });
+};
+
+window.hapusSoalDraft = function(index) {
+    draftSoalQuiz.splice(index, 1);
+    renderPreviewSoal();
+    resetFormSoalAktif();
 };
 
 window.simpanQuizBaru = async function() {
@@ -927,49 +1193,49 @@ window.simpanQuizBaru = async function() {
     }
 
     const judul = document.getElementById('quizTitle')?.value.trim();
-    const kodeKelas = document.getElementById('quizClassCode')?.value.trim().toUpperCase();
+    const kelasId = document.getElementById('quizKelasSelect')?.value;
     const durasi = parseInt(document.getElementById('quizDuration')?.value) || 10;
-    const soal = document.getElementById('soalText')?.value.trim();
-    const optA = document.getElementById('optA')?.value.trim();
-    const optB = document.getElementById('optB')?.value.trim();
-    const optC = document.getElementById('optC')?.value.trim();
-    const kunci = document.getElementById('kunciJawaban')?.value;
 
-    if (!judul || !kodeKelas || !soal || !optA || !optB || !optC || !kunci) {
-        alert("Semua field quiz wajib diisi.");
+    if (!judul || !kelasId) {
+        alert("Judul quiz dan kelas wajib dipilih.");
+        return;
+    }
+
+    if (!draftSoalQuiz.length) {
+        alert("Tambahkan minimal 1 soal dengan tombol 'Simpan Soal'.");
         return;
     }
 
     try {
+        const kelasDoc = await db.collection("kelas").doc(kelasId).get();
+        if (!kelasDoc.exists) {
+            alert("Kelas tidak ditemukan.");
+            return;
+        }
+
+        const kelasData = kelasDoc.data();
+
+        if (kelasData.guru_email !== user.email) {
+            alert("Anda hanya dapat membuat quiz untuk kelas milik Anda.");
+            return;
+        }
+
         await db.collection("quizzes").add({
             judul_quiz: judul,
-            kode_kelas: kodeKelas,
+            kelas_id: kelasId,
+            kelas_nama: kelasData.nama_kelas || "",
+            kode_kelas: kelasData.kode_kelas || "",
             durasi: durasi,
             pembuat: user.email,
             pembuat_nama: getNamaUser(user),
-            pertanyaan: [{
-                soal: soal,
-                a: optA,
-                b: optB,
-                c: optC,
-                kunci: kunci
-            }],
+            pertanyaan: draftSoalQuiz,
             hasil_siswa: [],
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         alert("Quiz berhasil dipublikasikan.");
-
-        document.getElementById('quizTitle').value = "";
-        document.getElementById('quizClassCode').value = "";
-        document.getElementById('quizDuration').value = "";
-        document.getElementById('soalText').value = "";
-        document.getElementById('optA').value = "";
-        document.getElementById('optB').value = "";
-        document.getElementById('optC').value = "";
-        document.getElementById('kunciJawaban').value = "a";
-
         toggleModal("modalQuiz");
+        resetFormQuiz();
         muatDaftarQuiz();
     } catch (e) {
         console.error("Gagal membuat quiz:", e);
@@ -984,15 +1250,33 @@ window.muatDaftarQuiz = async function() {
     const user = getCurrentUser();
 
     try {
-        const snapshot = await db.collection("quizzes").get();
-        const quizList = [];
+        let quizList = [];
 
-        snapshot.forEach((doc) => {
-            quizList.push({
-                id: doc.id,
-                ...doc.data()
+        if (isGuru()) {
+            const snapshot = await db.collection("quizzes")
+                .where("pembuat", "==", user.email)
+                .get();
+
+            snapshot.forEach((doc) => {
+                quizList.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
             });
-        });
+        } else {
+            const joinedClassIds = await getKelasYangDiikutiSiswa();
+            const snapshot = await db.collection("quizzes").get();
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                if (joinedClassIds.includes(data.kelas_id)) {
+                    quizList.push({
+                        id: doc.id,
+                        ...data
+                    });
+                }
+            });
+        }
 
         quizList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -1007,28 +1291,37 @@ window.muatDaftarQuiz = async function() {
                 <article class="card-subject">
                     <div class="subject-tag">BELUM ADA</div>
                     <h3>Belum ada quiz</h3>
-                    <p>Quiz yang tersedia akan tampil di sini.</p>
+                    <p>${isGuru() ? "Anda belum membuat quiz." : "Belum ada quiz untuk kelas yang Anda ikuti."}</p>
                 </article>
             `;
+            tampilkanNilaiQuiz([]);
             return;
         }
 
         quizList.forEach((data) => {
             const isOwner = isGuru() && data.pembuat === user.email;
+            const jumlahSoal = Array.isArray(data.pertanyaan) ? data.pertanyaan.length : 0;
+            const hasilSiswa = Array.isArray(data.hasil_siswa) ? data.hasil_siswa : [];
+            const sudahMengerjakan = hasilSiswa.some(item => item.email === user.email);
 
             grid.innerHTML += `
                 <article class="card-subject">
                     <div class="subject-tag">QUIZ</div>
                     <h3>${escapeHtml(data.judul_quiz || "-")}</h3>
-                    <p><strong>Kode kelas:</strong> ${escapeHtml(data.kode_kelas || "-")}</p>
+                    <p><strong>Kelas:</strong> ${escapeHtml(data.kelas_nama || "-")}</p>
                     <p><strong>Durasi:</strong> ${data.durasi || 10} menit</p>
+                    <p><strong>Jumlah soal:</strong> ${jumlahSoal}</p>
                     <div class="card-footer-row" style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
-                        ${isSiswa() ? `<button class="btn-buka" onclick="mulaiQuiz('${data.id}')">Mulai</button>` : ""}
+                        ${isSiswa() && !sudahMengerjakan ? `<button class="btn-buka" onclick="mulaiQuiz('${data.id}')">Mulai</button>` : ""}
+                        ${isSiswa() && sudahMengerjakan ? `<button class="ghost-btn" onclick="lihatNilaiQuiz('${data.id}')">Lihat Nilai</button>` : ""}
+                        ${isOwner ? `<button class="ghost-btn" onclick="lihatNilaiQuiz('${data.id}')">Nilai Siswa</button>` : ""}
                         ${isOwner ? `<button class="ghost-btn" onclick="hapusQuiz('${data.id}')">Hapus</button>` : ""}
                     </div>
                 </article>
             `;
         });
+
+        tampilkanNilaiQuiz(quizList);
     } catch (e) {
         console.error("Gagal memuat quiz:", e);
         grid.innerHTML = `
@@ -1065,6 +1358,7 @@ window.mulaiQuiz = async function(id) {
     const soalKonten = document.getElementById("soalKonten");
     const quizActiveTitle = document.getElementById("quizActiveTitle");
     const timerDisplay = document.getElementById("timerDisplay");
+    const user = getCurrentUser();
 
     try {
         const doc = await db.collection("quizzes").doc(id).get();
@@ -1074,20 +1368,32 @@ window.mulaiQuiz = async function(id) {
         }
 
         const data = doc.data();
-        const soal = data.pertanyaan?.[0];
+        const pertanyaan = Array.isArray(data.pertanyaan) ? data.pertanyaan : [];
+        const hasil = Array.isArray(data.hasil_siswa) ? data.hasil_siswa : [];
+        const sudahAda = hasil.some((item) => item.email === user.email);
 
-        if (!soal) {
+        if (sudahAda) {
+            alert("Quiz ini hanya bisa dikerjakan sekali.");
+            lihatNilaiQuiz(id);
+            return;
+        }
+
+        if (!pertanyaan.length) {
             alert("Soal quiz tidak tersedia.");
             return;
         }
 
         workArea.classList.remove("hidden");
         quizActiveTitle.textContent = data.judul_quiz || "Quiz";
-        soalKonten.innerHTML = `
-            <p><strong>${escapeHtml(soal.soal)}</strong></p>
-            <label><input type="radio" name="jawaban" value="a"> ${escapeHtml(soal.a)}</label><br><br>
-            <label><input type="radio" name="jawaban" value="b"> ${escapeHtml(soal.b)}</label><br><br>
-            <label><input type="radio" name="jawaban" value="c"> ${escapeHtml(soal.c)}</label><br><br>
+
+        soalKonten.innerHTML = pertanyaan.map((soal, index) => `
+            <div style="margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid #eee;">
+                <p><strong>${index + 1}. ${escapeHtml(soal.soal)}</strong></p>
+                <label><input type="radio" name="jawaban_${index}" value="a"> ${escapeHtml(soal.a)}</label><br><br>
+                <label><input type="radio" name="jawaban_${index}" value="b"> ${escapeHtml(soal.b)}</label><br><br>
+                <label><input type="radio" name="jawaban_${index}" value="c"> ${escapeHtml(soal.c)}</label>
+            </div>
+        `).join("") + `
             <button class="btn-buka" onclick="submitQuiz('${id}')">Kirim Jawaban</button>
         `;
 
@@ -1101,7 +1407,8 @@ window.mulaiQuiz = async function(id) {
 
             if (sisaDetik <= 0) {
                 clearInterval(quizTimer);
-                alert("Waktu habis.");
+                submitQuiz(id, true);
+                return;
             }
 
             sisaDetik--;
@@ -1112,35 +1419,47 @@ window.mulaiQuiz = async function(id) {
     }
 };
 
-window.submitQuiz = async function(id) {
+window.submitQuiz = async function(id, autoSubmit = false) {
     const user = getCurrentUser();
-    const jawaban = document.querySelector('input[name="jawaban"]:checked')?.value;
-
-    if (!jawaban) {
-        alert("Pilih jawaban terlebih dahulu.");
-        return;
-    }
 
     try {
         const doc = await db.collection("quizzes").doc(id).get();
         if (!doc.exists) return;
 
         const data = doc.data();
-        const soal = data.pertanyaan?.[0];
-        const hasil = data.hasil_siswa || [];
+        const pertanyaan = Array.isArray(data.pertanyaan) ? data.pertanyaan : [];
+        const hasil = Array.isArray(data.hasil_siswa) ? data.hasil_siswa : [];
 
-        const skor = jawaban === soal.kunci ? 100 : 0;
         const sudahAda = hasil.some((item) => item.email === user.email);
-
         if (sudahAda) {
             alert("Anda sudah mengerjakan quiz ini.");
             return;
         }
 
+        let benar = 0;
+        const jawabanSiswa = [];
+
+        for (let i = 0; i < pertanyaan.length; i++) {
+            const jawaban = document.querySelector(`input[name="jawaban_${i}"]:checked`)?.value || null;
+
+            jawabanSiswa.push({
+                nomor: i + 1,
+                jawaban: jawaban
+            });
+
+            if (jawaban && jawaban === pertanyaan[i].kunci) {
+                benar++;
+            }
+        }
+
+        const skor = pertanyaan.length ? Math.round((benar / pertanyaan.length) * 100) : 0;
+
         hasil.push({
             nama: getNamaUser(user),
             email: user.email,
-            jawaban: jawaban,
+            jawaban: jawabanSiswa,
+            benar: benar,
+            total_soal: pertanyaan.length,
             skor: skor,
             submittedAt: new Date().toISOString()
         });
@@ -1150,29 +1469,138 @@ window.submitQuiz = async function(id) {
         });
 
         clearInterval(quizTimer);
-        alert(`Quiz selesai. Nilai Anda: ${skor}`);
-        document.getElementById("quizWorkArea").classList.add("hidden");
+        alert(autoSubmit ? `Waktu habis. Nilai Anda: ${skor}` : `Quiz selesai. Nilai Anda: ${skor}`);
+        document.getElementById("quizWorkArea")?.classList.add("hidden");
+        muatDaftarQuiz();
     } catch (e) {
         console.error("Gagal submit quiz:", e);
         alert("Gagal mengirim jawaban.");
     }
 };
 
+window.tampilkanNilaiQuiz = function() {
+    const sectionTitle = document.getElementById("nilaiSectionTitle");
+    const sectionDesc = document.getElementById("nilaiSectionDesc");
+    const list = document.getElementById("nilaiQuizList");
 
+    if (!list) return;
+
+    if (sectionTitle) {
+        sectionTitle.textContent = isGuru() ? "Nilai Siswa" : "Nilai Quiz Saya";
+    }
+
+    if (sectionDesc) {
+        sectionDesc.textContent = isGuru()
+            ? "Pilih tombol 'Nilai Siswa' pada quiz untuk melihat hasil siswa."
+            : "Pilih tombol 'Lihat Nilai' pada quiz yang sudah Anda kerjakan.";
+    }
+
+    list.innerHTML = `
+        <article class="card-subject">
+            <div class="subject-tag">INFO</div>
+            <h3>${isGuru() ? "Belum memilih quiz" : "Belum ada nilai dipilih"}</h3>
+            <p>${isGuru() ? "Klik tombol 'Nilai Siswa' pada salah satu quiz." : "Setelah mengerjakan quiz, klik 'Lihat Nilai'."}</p>
+        </article>
+    `;
+};
+
+window.lihatNilaiQuiz = async function(id) {
+    const list = document.getElementById("nilaiQuizList");
+    const sectionTitle = document.getElementById("nilaiSectionTitle");
+    const sectionDesc = document.getElementById("nilaiSectionDesc");
+    const user = getCurrentUser();
+
+    if (!list) return;
+
+    try {
+        const doc = await db.collection("quizzes").doc(id).get();
+        if (!doc.exists) {
+            list.innerHTML = `<p>Quiz tidak ditemukan.</p>`;
+            return;
+        }
+
+        const data = doc.data();
+        const hasil = Array.isArray(data.hasil_siswa) ? data.hasil_siswa : [];
+
+        if (sectionTitle) {
+            sectionTitle.textContent = isGuru()
+                ? `Nilai Siswa - ${data.judul_quiz || "Quiz"}`
+                : `Nilai Saya - ${data.judul_quiz || "Quiz"}`;
+        }
+
+        if (sectionDesc) {
+            sectionDesc.textContent = isGuru()
+                ? "Berikut hasil siswa yang sudah mengerjakan quiz ini."
+                : "Berikut hasil quiz yang sudah Anda kerjakan.";
+        }
+
+        list.innerHTML = "";
+
+        if (isGuru()) {
+            if (!hasil.length) {
+                list.innerHTML = `
+                    <article class="card-subject">
+                        <div class="subject-tag">BELUM ADA</div>
+                        <h3>Belum ada siswa mengerjakan</h3>
+                        <p>Hasil quiz siswa akan tampil di sini.</p>
+                    </article>
+                `;
+                return;
+            }
+
+            hasil.forEach((item) => {
+                list.innerHTML += `
+                    <article class="card-subject">
+                        <div class="subject-tag">NILAI SISWA</div>
+                        <h3>${escapeHtml(item.nama || "-")}</h3>
+                        <p><strong>Email:</strong> ${escapeHtml(item.email || "-")}</p>
+                        <p><strong>Skor:</strong> ${item.skor ?? 0}</p>
+                        <p><strong>Benar:</strong> ${item.benar ?? 0} / ${item.total_soal ?? 0}</p>
+                        <p><strong>Dikirim:</strong> ${formatTanggal(item.submittedAt)}</p>
+                    </article>
+                `;
+            });
+        } else {
+            const nilaiSaya = hasil.find((item) => item.email === user.email);
+
+            if (!nilaiSaya) {
+                list.innerHTML = `
+                    <article class="card-subject">
+                        <div class="subject-tag">BELUM ADA</div>
+                        <h3>Anda belum memiliki nilai</h3>
+                        <p>Kerjakan quiz terlebih dahulu.</p>
+                    </article>
+                `;
+                return;
+            }
+
+            list.innerHTML = `
+                <article class="card-subject">
+                    <div class="subject-tag">NILAI SAYA</div>
+                    <h3>${escapeHtml(data.judul_quiz || "-")}</h3>
+                    <p><strong>Skor:</strong> ${nilaiSaya.skor ?? 0}</p>
+                    <p><strong>Benar:</strong> ${nilaiSaya.benar ?? 0} / ${nilaiSaya.total_soal ?? 0}</p>
+                    <p><strong>Status:</strong> Selesai</p>
+                </article>
+            `;
+        }
+    } catch (e) {
+        console.error("Gagal memuat nilai quiz:", e);
+        list.innerHTML = `<p>Gagal memuat nilai quiz.</p>`;
+    }
+};
 
 /* ==========================================================
    9. PROFILE
    ========================================================== */
 window.initProfilePage = function() {
     const user = getCurrentUser();
-
     if (!user.email) {
         window.location.href = "index.html";
         return;
     }
 
     const name = getNamaUser(user);
-
     document.getElementById("profileName") && (document.getElementById("profileName").textContent = name);
     document.getElementById("detailName") && (document.getElementById("detailName").textContent = name);
     document.getElementById("profileRole") && (document.getElementById("profileRole").textContent = user.role.toUpperCase());
@@ -1201,6 +1629,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    if (path.includes('dashboard.html')) initDashboard();
+
     if (path.includes('kelas.html')) {
         if (getUrlParam("tab") === "detail" && getUrlParam("kelas_id")) {
             initDetailKelasPage();
@@ -1209,9 +1639,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    if (path.includes('materi.html')) {
-        initMateriPage();
-    }
+    if (path.includes('materi.html')) initMateriPage();
+    if (path.includes('quiz.html')) initQuizPage();
+    if (path.includes('profil.html')) initProfilePage();
 });
 
 /* ==========================================================
@@ -1219,7 +1649,6 @@ document.addEventListener('DOMContentLoaded', () => {
    ========================================================== */
 window.initDashboard = async function() {
     const user = getCurrentUser();
-
     if (!user.email) {
         window.location.href = "index.html";
         return;
@@ -1242,29 +1671,14 @@ window.isiHeaderDashboard = async function(user) {
 
     const nama = getNamaUser(user);
 
-    if (welcomeLabel) {
-        welcomeLabel.textContent = user.role === "guru"
-            ? `Dashboard guru • ${nama}`
-            : `Dashboard siswa • ${nama}`;
-    }
-
-    if (heroBadge) {
-        heroBadge.textContent = user.role === "guru"
-            ? "EduSmart • Panel Pengelolaan Kelas"
-            : "EduSmart • Panel Aktivitas Belajar";
-    }
-
-    if (heroTitle) {
-        heroTitle.textContent = user.role === "guru"
-            ? `Selamat datang, ${nama}. Kelola kelas, materi, dan quiz dengan mudah.`
-            : `Selamat datang, ${nama}. Pantau kelas, materi, dan quiz Anda di satu tempat.`;
-    }
-
-    if (heroDesc) {
-        heroDesc.textContent = user.role === "guru"
-            ? "Semua aktivitas mengajar tersusun rapi: unggah materi, buat quiz, dan atur kelas aktif."
-            : "Akses materi, ikuti quiz, dan lihat perkembangan kelas Anda dengan tampilan yang lebih rapi.";
-    }
+    if (welcomeLabel) welcomeLabel.textContent = user.role === "guru" ? `Dashboard guru • ${nama}` : `Dashboard siswa • ${nama}`;
+    if (heroBadge) heroBadge.textContent = user.role === "guru" ? "EduSmart • Panel Pengelolaan Kelas" : "EduSmart • Panel Aktivitas Belajar";
+    if (heroTitle) heroTitle.textContent = user.role === "guru"
+        ? `Selamat datang, ${nama}. Kelola kelas, materi, dan quiz dengan mudah.`
+        : `Selamat datang, ${nama}. Pantau kelas, materi, dan quiz Anda di satu tempat.`;
+    if (heroDesc) heroDesc.textContent = user.role === "guru"
+        ? "Semua aktivitas mengajar tersusun rapi: unggah materi, buat quiz, dan atur kelas aktif."
+        : "Akses materi, ikuti quiz, dan lihat perkembangan kelas Anda dengan tampilan yang lebih rapi.";
 };
 
 window.isiStatDashboard = async function(user) {
@@ -1273,10 +1687,6 @@ window.isiStatDashboard = async function(user) {
     const statThree = document.getElementById("statThree");
 
     try {
-        let totalMateri = 0;
-        let totalQuiz = 0;
-        let totalKelas = 0;
-
         if (isGuru()) {
             const materiSnap = await db.collection("materi")
                 .where("email_pengunggah", "==", user.email)
@@ -1290,35 +1700,45 @@ window.isiStatDashboard = async function(user) {
                 .where("guru_email", "==", user.email)
                 .get();
 
-            totalMateri = materiSnap.size;
-            totalQuiz = quizSnap.size;
-            totalKelas = kelasSnap.size;
-
-            if (statOne) statOne.textContent = `${totalMateri} Materi dikelola`;
-            if (statTwo) statTwo.textContent = `${totalQuiz} Quiz dipublikasikan`;
-            if (statThree) statThree.textContent = `${totalKelas} Kelas aktif`;
+            if (statOne) statOne.textContent = `${materiSnap.size} Materi dikelola`;
+            if (statTwo) statTwo.textContent = `${quizSnap.size} Quiz dipublikasikan`;
+            if (statThree) statThree.textContent = `${kelasSnap.size} Kelas aktif`;
         } else {
-            const materiSnap = await db.collection("materi").get();
-            const quizSnap = await db.collection("quizzes").get();
             const kelasSnap = await db.collection("kelas").get();
+            const joinedClassIds = [];
 
-            totalMateri = materiSnap.size;
-            totalQuiz = quizSnap.size;
-
-            let ikutKelas = 0;
             kelasSnap.forEach(doc => {
                 const data = doc.data();
                 const siswa = data.siswa_terdaftar || [];
-                if (siswa.some(item => item.email === user.email)) {
-                    ikutKelas++;
+                const ikut = siswa.some(item => item.email === user.email);
+                if (ikut) {
+                    joinedClassIds.push(doc.id);
                 }
             });
 
-            totalKelas = ikutKelas;
+            const materiSnap = await db.collection("materi").get();
+            let totalMateri = 0;
+
+            materiSnap.forEach(doc => {
+                const data = doc.data();
+                if (joinedClassIds.includes(data.kelas_id)) {
+                    totalMateri++;
+                }
+            });
+
+            const quizSnap = await db.collection("quizzes").get();
+            let totalQuiz = 0;
+
+            quizSnap.forEach(doc => {
+                const data = doc.data();
+                if (joinedClassIds.includes(data.kelas_id)) {
+                    totalQuiz++;
+                }
+            });
 
             if (statOne) statOne.textContent = `${totalMateri} Materi tersedia`;
             if (statTwo) statTwo.textContent = `${totalQuiz} Quiz tersedia`;
-            if (statThree) statThree.textContent = `${totalKelas} Kelas diikuti`;
+            if (statThree) statThree.textContent = `${joinedClassIds.length} Kelas diikuti`;
         }
     } catch (e) {
         console.error("Gagal memuat statistik dashboard:", e);
@@ -1328,7 +1748,7 @@ window.isiStatDashboard = async function(user) {
     }
 };
 
-window.isiQuickMenu = async function(user) {
+window.isiQuickMenu = async function() {
     const quickGrid = document.getElementById("quickGrid");
     if (!quickGrid) return;
 
@@ -1367,23 +1787,56 @@ window.isiMateriDashboard = async function(user) {
     if (!materiGrid) return;
 
     try {
-        let snapshot;
+        let materiList = [];
 
         if (isGuru()) {
-            snapshot = await db.collection("materi")
+            const snapshot = await db.collection("materi")
                 .where("email_pengunggah", "==", user.email)
                 .get();
-        } else {
-            snapshot = await db.collection("materi").get();
-        }
 
-        const materiList = [];
-        snapshot.forEach(doc => {
-            materiList.push({
-                id: doc.id,
-                ...doc.data()
+            snapshot.forEach(doc => {
+                materiList.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
             });
-        });
+        } else {
+            // siswa: hanya ambil materi dari kelas yang diikuti
+            const kelasSnap = await db.collection("kelas").get();
+            const joinedClassIds = [];
+
+            kelasSnap.forEach(doc => {
+                const data = doc.data();
+                const siswa = data.siswa_terdaftar || [];
+                const ikut = siswa.some(item => item.email === user.email);
+                if (ikut) {
+                    joinedClassIds.push(doc.id);
+                }
+            });
+
+            // kalau belum ikut kelas, jangan tampilkan materi
+            if (!joinedClassIds.length) {
+                materiGrid.innerHTML = `
+                    <article class="card-subject">
+                        <div class="subject-tag">BELUM ADA</div>
+                        <h3>Belum ada materi</h3>
+                        <p>Anda belum tergabung ke kelas mana pun.</p>
+                    </article>
+                `;
+                return;
+            }
+
+            const materiSnap = await db.collection("materi").get();
+            materiSnap.forEach(doc => {
+                const data = doc.data();
+                if (joinedClassIds.includes(data.kelas_id)) {
+                    materiList.push({
+                        id: doc.id,
+                        ...data
+                    });
+                }
+            });
+        }
 
         materiList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -1399,7 +1852,7 @@ window.isiMateriDashboard = async function(user) {
                 <article class="card-subject">
                     <div class="subject-tag">BELUM ADA</div>
                     <h3>Belum ada materi</h3>
-                    <p>${isGuru() ? "Anda belum mengunggah materi." : "Belum ada materi yang tersedia."}</p>
+                    <p>${isGuru() ? "Anda belum mengunggah materi." : "Belum ada materi untuk kelas yang Anda ikuti."}</p>
                 </article>
             `;
             return;
@@ -1412,7 +1865,7 @@ window.isiMateriDashboard = async function(user) {
                     <h3>${escapeHtml(data.judul || "-")}</h3>
                     <p>${escapeHtml(data.deskripsi || "-")}</p>
                     <div class="card-footer-row" style="margin-top:16px;">
-                        <a href="${escapeHtml(data.link_sumber || "#")}" target="_blank" class="btn-buka">Buka</a>
+                        <button type="button" class="btn-buka" onclick="bukaMateriById('${data.id}')">Buka</button>
                     </div>
                 </article>
             `;
@@ -1437,23 +1890,37 @@ window.isiQuizDashboard = async function(user) {
     quizSection.classList.remove("hidden");
 
     try {
-        let snapshot;
+        let quizList = [];
 
         if (isGuru()) {
-            snapshot = await db.collection("quizzes")
+            const snapshot = await db.collection("quizzes")
                 .where("pembuat", "==", user.email)
                 .get();
-        } else {
-            snapshot = await db.collection("quizzes").get();
-        }
 
-        const quizList = [];
-        snapshot.forEach(doc => {
-            quizList.push({
-                id: doc.id,
-                ...doc.data()
+            snapshot.forEach(doc => {
+                quizList.push({ id: doc.id, ...doc.data() });
             });
-        });
+
+        } else {
+            // 🔥 AMBIL KELAS YANG DIA IKUTI
+            const joinedClassIds = await getKelasYangDiikutiSiswa();
+
+            if (!joinedClassIds.length) {
+                quizGrid.innerHTML = `<p>Anda belum ikut kelas.</p>`;
+                return;
+            }
+
+            const snapshot = await db.collection("quizzes").get();
+
+            snapshot.forEach(doc => {
+                const data = doc.data();
+
+                // ✅ FILTER DI SINI
+                if (joinedClassIds.includes(data.kelas_id)) {
+                    quizList.push({ id: doc.id, ...data });
+                }
+            });
+        }
 
         quizList.sort((a, b) => {
             const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
@@ -1482,6 +1949,7 @@ window.isiQuizDashboard = async function(user) {
                 </article>
             `;
         });
+
     } catch (e) {
         console.error("Gagal memuat quiz dashboard:", e);
         quizGrid.innerHTML = `<p>Gagal memuat quiz.</p>`;
@@ -1506,10 +1974,7 @@ window.isiKelasDashboard = async function(user) {
             const milikGuru = data.guru_email === user.email;
 
             if ((isGuru() && milikGuru) || (isSiswa() && ikut)) {
-                kelasList.push({
-                    id: doc.id,
-                    ...data
-                });
+                kelasList.push({ id: doc.id, ...data });
             }
         });
 
@@ -1546,58 +2011,68 @@ window.isiKelasDashboard = async function(user) {
     }
 };
 
-window.aturAksiDashboard = function(user) {
+window.aturAksiDashboard = function() {
     const materiAction = document.getElementById("materiAction");
-    if (materiAction) {
-        if (isGuru()) {
-            materiAction.classList.remove("hidden");
-        } else {
-            materiAction.classList.add("hidden");
-        }
-    }
+    if (materiAction) materiAction.classList.add("hidden");
 };
 
 window.tambahMateri = async function() {
-    const user = getCurrentUser();
+    alert("Materi hanya dapat ditambahkan dari halaman kelas yang dibuat guru.");
+};
 
-    if (!isGuru()) {
-        alert("Hanya guru yang dapat menambahkan materi.");
+/* ==========================================================
+   12. RESET PASSWORD MANUAL
+   ========================================================== */
+window.resetPasswordManual = async function() {
+    const email = document.getElementById("resetEmail")?.value.trim();
+    const newPass = document.getElementById("resetPassword")?.value;
+    const confirmPass = document.getElementById("resetConfirmPassword")?.value;
+    const resetError = document.getElementById("resetErrorMsg");
+
+    if (resetError) resetError.textContent = "";
+
+    if (!email || !newPass || !confirmPass) {
+        if (resetError) resetError.textContent = "Semua field wajib diisi.";
         return;
     }
 
-    const judul = document.getElementById("materiTitle")?.value.trim();
-    const kategori = document.getElementById("materiCategory")?.value;
-    const deskripsi = document.getElementById("materiDesc")?.value.trim();
-    const link = document.getElementById("materiLink")?.value.trim();
+    if (newPass !== confirmPass) {
+        if (resetError) resetError.textContent = "Konfirmasi password tidak cocok.";
+        return;
+    }
 
-    if (!judul || !kategori || !deskripsi || !link) {
-        alert("Semua field materi wajib diisi.");
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+    if (!passwordRegex.test(newPass)) {
+        if (resetError) resetError.textContent = "Password wajib 8+ karakter, mengandung huruf besar, angka, dan simbol.";
         return;
     }
 
     try {
-        await db.collection("materi").add({
-            judul: judul,
-            kategori: kategori,
-            deskripsi: deskripsi,
-            link_sumber: link,
-            email_pengunggah: user.email,
-            nama_pengunggah: getNamaUser(user),
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        const snapshot = await db.collection("users")
+            .where("email", "==", email)
+            .get();
+
+        if (snapshot.empty) {
+            if (resetError) resetError.textContent = "Email tidak ditemukan.";
+            return;
+        }
+
+        const batch = db.batch();
+        snapshot.forEach((doc) => {
+            batch.update(doc.ref, {
+                password: newPass
+            });
         });
 
-        alert("Materi berhasil ditambahkan.");
+        await batch.commit();
 
-        document.getElementById("materiTitle").value = "";
-        document.getElementById("materiCategory").value = "Matematika";
-        document.getElementById("materiDesc").value = "";
-        document.getElementById("materiLink").value = "";
-
-        toggleModal("modalMateri");
-        isiMateriDashboard(user);
-        isiStatDashboard(user);
+        alert("Password berhasil diperbarui. Silakan login.");
+        if (document.getElementById("resetEmail")) document.getElementById("resetEmail").value = "";
+        if (document.getElementById("resetPassword")) document.getElementById("resetPassword").value = "";
+        if (document.getElementById("resetConfirmPassword")) document.getElementById("resetConfirmPassword").value = "";
+        toggleModal("modalLupaSandi");
     } catch (e) {
-        console.error("Gagal tambah materi:", e);
-        alert("Gagal menambahkan materi.");
+        console.error("Gagal reset password:", e);
+        if (resetError) resetError.textContent = "Gagal reset password.";
     }
 };

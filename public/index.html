@@ -64,9 +64,15 @@
           </div>
         </div>
 
-        <button class="btn" onclick="login()">Masuk Sekarang</button>
+        <button class="btn" type="button" onclick="login()">Masuk Sekarang</button>
+
         <div class="helper-row">
           <span id="roleHint">Akses dashboard pembelajaran siswa.</span>
+          <button class="text-btn" type="button" onclick="toggleModal('modalLupaSandi')">Lupa sandi?</button>
+        </div>
+
+        <div class="helper-row">
+          <span></span>
           <button class="text-btn" type="button" onclick="showRegister()">Buat akun</button>
         </div>
       </div>
@@ -80,7 +86,7 @@
 
         <div class="role-switch" id="registerRoleSwitch">
           <button class="role-btn active" type="button" data-role="siswa" onclick="setRegisterRole('siswa')">Siswa</button>
-          <button class="role-btn active" type="button" data-role="guru" onclick="setRegisterRole('guru')">Guru</button>
+          <button class="role-btn" type="button" data-role="guru" onclick="setRegisterRole('guru')">Guru</button>
         </div>
 
         <div class="field">
@@ -96,18 +102,17 @@
         <div class="field">
           <label>Password baru</label>
           <div class="password-wrapper">
-            <input 
-              type="password" 
-              id="regPass" 
+            <input
+              type="password"
+              id="regPass"
               placeholder="Minimal 8 karakter..."
               minlength="8"
-              pattern="(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{};':&quot;\\|,.<>\/?]).{8,}"
               required
             >
             <button class="toggle" type="button" onclick="togglePass('regPass', this)">👁️</button>
           </div>
           <small id="passHint" style="font-size: 11px; margin-top: 5px; display: block; color: #666;">
-            Wajib: 8+ karakter, Huruf Besar, Angka, & Simbol.
+            Wajib: 8+ karakter, huruf besar, angka, dan simbol.
           </small>
         </div>
 
@@ -123,10 +128,49 @@
     </section>
   </div>
 
+  <!-- MODAL LUPA SANDI -->
+  <div id="modalLupaSandi" class="modal-overlay" style="display:none;">
+    <div class="modal-box" style="max-width:480px;">
+      <div class="modal-header">
+        <h3>Reset Password</h3>
+        <button type="button" class="modal-close" onclick="toggleModal('modalLupaSandi')">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="resetEmail">Email</label>
+          <input type="email" id="resetEmail" placeholder="Masukkan email akun">
+        </div>
+
+        <div class="form-group">
+          <label for="resetPassword">Password Baru</label>
+          <div class="password-wrapper">
+            <input type="password" id="resetPassword" placeholder="Password baru">
+            <button class="toggle" type="button" onclick="togglePass('resetPassword', this)">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="resetConfirmPassword">Konfirmasi Password Baru</label>
+          <div class="password-wrapper">
+            <input type="password" id="resetConfirmPassword" placeholder="Ulangi password baru">
+            <button class="toggle" type="button" onclick="togglePass('resetConfirmPassword', this)">👁️</button>
+          </div>
+        </div>
+
+        <div id="resetErrorMsg" style="color:#ff4d4d; margin-top:8px; min-height:1.2em;"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" onclick="toggleModal('modalLupaSandi')">Batal</button>
+        <button type="button" class="btn-buka" onclick="resetPasswordManual()">Simpan Password Baru</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script> 
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  
   <script src="script.js"></script>
 </body>
 </html>

@@ -594,15 +594,3 @@ a { color: inherit; text-decoration: none; }
 
 .btn-action-edit:hover { background: #f0fdf4; border-color: #bbf7d0; }
 .btn-action-del:hover { background: #fff5f5; border-color: #feb2b2; }
-/* 🔥 FIX AGAR MODAL GA NUTUP KLIK */
-.modal-overlay.hidden {
-  display: none !important;
-  pointer-events: none !important;
-}
-
-/* 🔥 PASTIKAN TOMBOL BISA DIKLIK */
-#featureAction {
-  position: relative;
-  z-index: 10000;
-  pointer-events: auto;
-}

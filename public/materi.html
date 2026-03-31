@@ -6,7 +6,7 @@
   <title>Materi EduSmart</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="dashboard-page">
+<body class="dashboard-page" onload="initMateriPage()">
   <header class="topbar">
     <div class="logo-area">
       <div class="logo-circle">ES</div>
@@ -32,7 +32,10 @@
         <div>
           <p class="eyebrow">PUSAT MATERI</p>
           <h1 id="featureTitle">Materi pembelajaran</h1>
-          <p id="featureDescription">Semua materi tersusun berdasarkan topik agar lebih mudah dipelajari maupun dikelola.</p>
+          <p id="featureDescription">
+            Semua materi tersusun berdasarkan topik agar lebih mudah dipelajari.
+          </p>
+
           <div class="filter-row">
             <span class="filter-chip">📘 Modul</span>
             <span class="filter-chip">🎥 Video</span>
@@ -40,18 +43,15 @@
           </div>
         </div>
 
-        <div id="materiControls">
-          <button class="ghost-btn" id="featureAction" type="button">Tambah materi</button>
-        </div>
+        <div id="materiControls"></div>
       </div>
 
       <div class="feature-grid" id="materiGrid"></div>
     </section>
   </main>
 
-  <!-- Modal Tambah Materi -->
   <div id="modalTambahMateri" class="modal-overlay" style="display:none;">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:640px;">
       <div class="modal-header">
         <h2>Tambah Materi</h2>
         <button type="button" class="modal-close" onclick="toggleModal('modalTambahMateri')">✕</button>
@@ -59,26 +59,34 @@
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="inputJudulMateri">Judul materi</label>
-          <input type="text" id="inputJudulMateri" placeholder="Masukkan judul materi">
+          <label for="inputJudulMateri">Judul Materi</label>
+          <input type="text" id="inputJudulMateri" placeholder="Contoh: Sistem Pernapasan">
         </div>
 
         <div class="form-group">
           <label for="inputDeskripsiMateri">Deskripsi</label>
-          <textarea id="inputDeskripsiMateri" rows="4" placeholder="Masukkan deskripsi materi"></textarea>
+          <textarea id="inputDeskripsiMateri" rows="4" placeholder="Jelaskan materi secara singkat"></textarea>
         </div>
 
         <div class="form-group">
-          <label for="inputKategoriMateri">Jenis materi</label>
+          <label for="inputKategoriMateri">Jenis Materi</label>
           <select id="inputKategoriMateri">
-            <option value="Modul">📘 Modul</option>
-            <option value="Video">🎥 Video</option>
-            <option value="Ringkasan">🧠 Ringkasan</option>
+            <option value="Modul">Modul</option>
+            <option value="Video">Video</option>
+            <option value="Ringkasan">Ringkasan</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label for="inputLinkMateri">Link sumber</label>
+          <label for="inputFileMateri">Upload File Materi</label>
+          <input type="file" id="inputFileMateri" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt">
+          <small style="display:block; margin-top:6px; opacity:.75;">
+            Disarankan file kecil, maksimal sekitar 700 KB.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="inputLinkMateri">Atau Link Sumber</label>
           <input type="url" id="inputLinkMateri" placeholder="https://contoh.com/materi">
         </div>
       </div>
